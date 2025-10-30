@@ -15,7 +15,7 @@ from google.colab import files
 
 # --- Step 1: User Configuration ---
 # PASTE YOUR NGROK AUTHTOKEN HERE (get it from: https://dashboard.ngrok.com/get-started/your-authtoken)
-NGROK_AUTH_TOKEN = "2sgRM7FemgplkDA2ozAMPWLUaVp_81hkgx7wJD17rew3zH62T"
+# NGROK_AUTH_TOKEN = "2sgRM7FemgplkDA2ozAMPWLUaVp_81hkgx7wJD17rew3zH62T"
 
 
 # --- Step 2: Download and Set Up the Project Environment ---
