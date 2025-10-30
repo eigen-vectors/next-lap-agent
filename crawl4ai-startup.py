@@ -12,8 +12,6 @@ import os
 import sys
 import subprocess
 from google.colab import files
-pip install streamlit -q
-pip install pyngrok -q
 
 # --- Step 1: User Configuration ---
 # PASTE YOUR NGROK AUTHTOKEN HERE (get it from: https://dashboard.ngrok.com/get-started/your-authtoken)
