@@ -19,11 +19,14 @@ def setup_and_launch():
     print("\n[1/4] Downloading project files from GitHub...")
     try:
         subprocess.run(["wget", "-q", "-O", project_zip_name, project_zip_url], check=True)
+        
+        # NOTE: The '-o' flag forces overwrite without prompting, resolving the 'replace file' error.
         subprocess.run(["unzip", "-o", project_zip_name], check=True, capture_output=True)
         print("✅ Project files are ready.")
     except subprocess.CalledProcessError as e:
+        # Use return to cleanly exit the function without needing 'exit()'
         print(f"❌ ERROR: Failed to download or unzip project. Details: {e.stderr.decode()}")
-        return
+        return 
 
     # --- Step 2: Install All Dependencies ---
     print("\n[2/4] Installing all dependencies... (This will take a few moments)")
