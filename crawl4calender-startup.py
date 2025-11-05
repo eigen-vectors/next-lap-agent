@@ -19,7 +19,6 @@ def setup_and_launch():
     print("\n[1/5] Downloading project files from GitHub...")
     try:
         subprocess.run(["wget", "-q", "-O", project_zip_name, project_zip_url], check=True)
-        # The '-o' flag forces overwrite without prompting.
         subprocess.run(["unzip", "-o", project_zip_name], check=True, capture_output=True)
         print("✅ Project files are ready.")
     except subprocess.CalledProcessError as e:
@@ -29,12 +28,10 @@ def setup_and_launch():
     # --- Step 2: Install Python & Node Dependencies ---
     print("\n[2/5] Installing dependencies... (This will take a few minutes)")
     try:
-        # Install Python packages
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "streamlit", "python-dotenv"], check=True)
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", "requirements.txt"], check=True)
         print("✅ Python dependencies installed.")
 
-        # Install localtunnel using npm
         print("⏳ Installing localtunnel...")
         subprocess.run(["npm", "install", "-g", "localtunnel"], check=True, capture_output=True)
         print("✅ localtunnel installed successfully!")
@@ -56,16 +53,13 @@ def setup_and_launch():
 
     # --- Step 4: Launch the Streamlit App in the Background ---
     print("\n[4/5] Launching the Streamlit application in the background...")
-    # The '&' runs the command in the background, allowing the script to continue.
     os.system("streamlit run streamlit_app.py &")
-    # Give Streamlit a moment to start up before we connect the tunnel
     time.sleep(5)
     print("✅ Streamlit is running.")
 
     # --- Step 5: Create Public URL with LocalTunnel ---
     print("\n[5/5] Creating a public URL with localtunnel...")
     try:
-        # Start localtunnel and pipe its output to a log file
         lt_process = subprocess.Popen(
             ["lt", "--port", "8501"],
             stdout=subprocess.PIPE,
@@ -73,22 +67,25 @@ def setup_and_launch():
             text=True
         )
 
-        # Wait a few seconds for localtunnel to generate the URL
         time.sleep(5)
 
-        # Read the URL from the process output
         public_url_line = lt_process.stdout.readline()
         if "your url is:" in public_url_line:
-            public_url = public_url_line.split(":")[-1].strip()
+            # FIX: Extract the URL and add the "https://" prefix
+            raw_url = public_url_line.split(":")[-1].strip()
+            public_url = f"https:{raw_url}" if raw_url.startswith('//') else raw_url
+            if not public_url.startswith('http'):
+                 public_url = f"https://{public_url}"
+
             print("\n" + "="*55)
             print("🎉 LAUNCH COMPLETE! Your Streamlit App is LIVE at:")
             print(f"   --> {public_url}")
             print("="*55)
-            print("(This script will keep running to maintain the tunnel. Close it to stop.)")
-            # Keep the script alive by waiting for the process to end
+            print("NOTE: On first visit, localtunnel may ask for a password.")
+            print("      This is a security check. The password is your IP address, which is shown on that page.")
+            print("\n(This script will keep running to maintain the tunnel. Close it to stop.)")
             lt_process.wait()
         else:
-            # If the URL wasn't found, print the error log
             print("❌ ERROR: Could not get public URL from localtunnel.")
             print(f"   Details: {lt_process.stderr.read()}")
 
