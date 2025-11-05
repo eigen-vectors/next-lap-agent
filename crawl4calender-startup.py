@@ -1,119 +1,185 @@
 import os
-import sys
+import sys  # <--- NEW: Imported sys for sys.exit
 import subprocess
-import time # Import for the persistence loop
+import time
+import re
+from pyngrok import ngrok, conf
 from dotenv import load_dotenv
-from pyngrok import ngrok
 
 # --- Configuration ---
+GITHUB_REPO_OWNER = "eigen-vectors"
+GITHUB_REPO_NAME = "next-lap-agent"
+GITHUB_BRANCH = "main"
 PROJECT_NAME = "crawl4calender"
-PROJECT_ZIP = f"{PROJECT_NAME}-project.zip"
-# Assuming the main application file inside the zip is still named 'streamlit_app.py' 
-# If your main file is named 'Crawl4Calender.py' you must update this:
-STREAMLIT_APP_FILE = "streamlit_app.py" 
+PROJECT_DIR = f"{PROJECT_NAME}-project"
+PROJECT_ZIP = f"{PROJECT_DIR}.zip"
+STREAMLIT_APP_FILE = "Crawl4Calender.py" # IMPORTANT: Update this if your main Streamlit file has a different name
+STREAMLIT_PORT = 8501
 
-def setup_and_launch():
-    """
-    Downloads the project, installs dependencies, finds and uses secrets from the
-    .env file, and launches the Streamlit application with zero manual input.
-    """
-    print(f"🚀 Starting the {PROJECT_NAME} Agent fully automated setup...")
+# Construct the raw file URL for the zip file
+REPO_BASE_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/{GITHUB_BRANCH}/"
+PROJECT_ZIP_URL = REPO_BASE_URL + PROJECT_ZIP
 
-    # --- Step 1: Download and Unpack the Project ---
-    print("\n[1/5] Downloading project files from GitHub...")
-    # NOTE: The zip file URL is updated here
-    project_zip_url = f"https://raw.githubusercontent.com/eigen-vectors/next-lap-agent/main/{PROJECT_ZIP}"
+# --- Helper Functions ---
+
+def execute_command(command, description):
+    """Executes a shell command and prints the status."""
+    print(f"\n--- {description} ---")
     try:
-        # Download the new zip file
-        subprocess.run(["wget", "-q", "-O", PROJECT_ZIP, project_zip_url], check=True)
-        # Unzip the project files (assuming they extract to the current directory)
-        subprocess.run(["unzip", "-o", PROJECT_ZIP], check=True, capture_output=True)
-        print("✅ Project files are ready.")
+        # Use subprocess.run for better control and error handling
+        result = subprocess.run(
+            command,
+            shell=True,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        # Optional: Print output if needed
+        # print(result.stdout)
+        print("SUCCESS")
     except subprocess.CalledProcessError as e:
-        print(f"❌ ERROR: Failed to download or unzip project. Details: {e.stderr.decode()}")
-        return
+        print(f"ERROR executing command: {command}")
+        print("STDOUT:", e.stdout)
+        print("STDERR:", e.stderr)
+        # If the unzip failed, this provides better diagnostic info
+        if "unzip" in command:
+            print("\n*** UNZIP DIAGNOSTIC MESSAGE ***")
+            print("The unzip command failed. This usually means the zip file (crawl4calender-project.zip)")
+            print("is corrupt, empty, or not found on GitHub. Please verify the uploaded file.")
+            print("*******************************\n")
 
-    # --- Step 2: Install Base Dependencies (for the script itself) ---
-    print("\n[2/5] Installing base dependencies (pyngrok, streamlit, dotenv)...")
+        # Corrected: Use sys.exit to stop script execution
+        sys.exit(1)
+    except FileNotFoundError:
+        print(f"ERROR: Command not found. Is it installed? Command: {command}")
+        sys.exit(1)
+
+
+def setup_ngrok_tunnel():
+    """Reads NGROK_AUTH_TOKEN and sets up the tunnel."""
+    print("\n--- Ngrok Setup and Tunneling ---")
+
+    # The .env file is inside the unzipped project directory
+    dotenv_path = os.path.join(PROJECT_DIR, ".env")
+
+    if not os.path.exists(dotenv_path):
+        print(f"ERROR: .env file not found at {dotenv_path}. Please ensure it is in the zip.")
+        sys.exit(1)
+
+    # Load environment variables from the .env file in the project folder
+    load_dotenv(dotenv_path=dotenv_path)
+
+    ngrok_token = os.getenv("NGROK_AUTH_TOKEN")
+    
+    if not ngrok_token:
+        print("ERROR: NGROK_AUTH_TOKEN not found in the .env file.")
+        print("Please obtain one from https://ngrok.com and add it to your .env.")
+        sys.exit(1)
+
+    # Set the token and connect
+    conf.get_default().auth_token = ngrok_token
+    conf.get_default().log_level = 40 # Set to WARNING to suppress excessive logging
+
     try:
-        # Install base packages required by the script/app
-        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "streamlit", "pyngrok", "python-dotenv"], check=True)
-        print("✅ Base dependencies installed.")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ ERROR: Failed to install Python packages. Details: {e.stderr.decode()}")
-        return
-        
-    # --- Step 3: Install Project Dependencies ---
-    print("\n[3/5] Installing project-specific dependencies... (from requirements.txt)")
-    try:
-        if not os.path.exists('requirements.txt'):
-             print("⚠️ WARNING: 'requirements.txt' not found. Skipping project dependency install.")
-        else:
-            # Install project requirements
-            subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", "requirements.txt"], check=True)
-            print("✅ Project dependencies installed successfully!")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ ERROR: Failed to install project packages. Details: {e.stderr.decode()}")
-        return
-
-    # --- Step 4: Load Secrets and Configure Ngrok ---
-    print("\n[4/5] Loading secrets and configuring ngrok...")
-    try:
-        if not os.path.exists('.env'):
-            print("❌ ERROR: '.env' file not found in the project zip. Cannot proceed.")
-            return
-
-        load_dotenv()
-        ngrok_token = os.getenv("NGROK_AUTH_TOKEN")
-
-        if not ngrok_token:
-            print("❌ ERROR: 'NGROK_AUTH_TOKEN' not found in your .env file. Aborting.")
-            return
-
-        # Use pyngrok's method to set the token
-        ngrok.set_auth_token(ngrok_token)
-        print("✅ ngrok configured successfully using the token from .env file.")
-
+        # Connect to the Streamlit port
+        public_url = ngrok.connect(STREAMLIT_PORT)
+        print("\n✅ Ngrok Tunnel Established!")
+        print(f"🌍 Your Streamlit Application is accessible at: {public_url}")
+        print("\nNote: Keep this Colab tab open to maintain the tunnel.")
+        return public_url
     except Exception as e:
-        print(f"❌ ERROR during secret configuration: {e}")
-        return
+        print(f"ERROR connecting with ngrok: {e}")
+        # Check for common ngrok authentication issue
+        if "Authentication failed" in str(e):
+             print("\n*** Ngrok Authentication Error ***")
+             print("The provided NGROK_AUTH_TOKEN seems invalid. Check your .env file.")
+        sys.exit(1)
 
-    # --- Step 5: Launch the Streamlit App and Tunnel ---
-    print("\n[5/5] Launching the Streamlit application and establishing tunnel...")
+
+def launch_streamlit():
+    """Launches the Streamlit application in the background."""
+    print("\n--- Launching Streamlit Application ---")
+    
+    app_path = os.path.join(PROJECT_DIR, STREAMLIT_APP_FILE)
+    if not os.path.exists(app_path):
+        print(f"ERROR: Streamlit app file not found at {app_path}. Check the STREAMLIT_APP_FILE constant.")
+        sys.exit(1)
+        
+    # Command to run Streamlit
+    command = [
+        "streamlit", "run", app_path,
+        f"--server.port={STREAMLIT_PORT}",
+        "--server.headless=true"
+    ]
+    
+    # Launch in a new process group (using preexec_fn) to allow for easier cleanup if needed
+    # We use subprocess.Popen to run it in the background
+    streamlit_process = subprocess.Popen(
+        command,
+        # Suppress STDOUT/STDERR to keep the Colab output clean
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True 
+    )
+    
+    print(f"Streamlit process started with PID: {streamlit_process.pid}")
+    print(f"Waiting a few seconds for Streamlit to initialize...")
+    time.sleep(5) # Give Streamlit a moment to start
+    
+    return streamlit_process
+
+# --- Main Execution ---
+
+if __name__ == "__main__":
+    
+    # 1. Download the project zip
+    execute_command(
+        f"wget -q {PROJECT_ZIP_URL}", 
+        f"Downloading {PROJECT_ZIP} from GitHub"
+    )
+    
+    # 2. Unzip the project (This is where the CalledProcessError occurred)
+    execute_command(
+        f"unzip -q {PROJECT_ZIP} -d .", 
+        f"Unzipping {PROJECT_ZIP} to {PROJECT_DIR}"
+    )
+
+    # 3. Install dependencies
+    requirements_path = os.path.join(PROJECT_DIR, "requirements.txt")
+    if not os.path.exists(requirements_path):
+         print(f"WARNING: requirements.txt not found at {requirements_path}. Skipping pip install.")
+    else:
+        # Install project requirements
+        execute_command(
+            f"pip install -r {requirements_path}", 
+            "Installing Project Dependencies"
+        )
+
+    # 4. Install ngrok library if not already present in the environment (common in Colab)
+    execute_command(
+        "pip install pyngrok",
+        "Installing pyngrok library"
+    )
+
+    # 5. Launch Streamlit
+    streamlit_proc = launch_streamlit()
+    
+    # 6. Setup Ngrok Tunnel and print URL
+    public_url = setup_ngrok_tunnel()
+    
+    # Keep the Colab notebook running indefinitely to keep the server alive
     try:
-        # Use Popen to launch Streamlit in the background, non-blocking
-        streamlit_command = [
-            sys.executable, "-m", "streamlit", "run", STREAMLIT_APP_FILE, 
-            "--server.port", "8501", 
-            "--server.headless", "true" # Important for non-browser environments like Colab
-        ]
-        # Launch the process. start_new_session is good practice.
-        subprocess.Popen(streamlit_command, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-        # Give Streamlit a few seconds to start up
-        time.sleep(5) 
-
-        # Establish the ngrok tunnel
-        public_url = ngrok.connect(8501).public_url
-        
-        print("\n" + "="*55)
-        print("🎉 LAUNCH COMPLETE! Your Streamlit App is LIVE at:")
-        print(f"   --> {public_url}")
-        print("   (Keep this Colab tab open to maintain the tunnel)")
-        print("="*55)
-
-        # Persistence Loop: This loop keeps the Python script running, which maintains the ngrok tunnel.
-        print("\nScript running perpetually to keep the tunnel alive...")
         while True:
             time.sleep(3600) # Sleep for 1 hour, loop forever
-
     except KeyboardInterrupt:
         print("\nKeyboard Interrupt detected. Shutting down...")
-        ngrok.kill() # Clean up ngrok processes
-    except Exception as e:
-        print(f"❌ ERROR: Failed to launch Streamlit or ngrok. Details: {e}")
-        ngrok.kill() # Ensure cleanup on error
-
-# --- Run the main function ---
-if __name__ == "__main__":
-    setup_and_launch()
+        ngrok.disconnect(public_url)
+        # Terminate the streamlit process
+        if streamlit_proc:
+             try:
+                 streamlit_proc.terminate()
+                 print("Streamlit process terminated.")
+             except:
+                 pass # Already dead or error
+        print("Cleanup complete. Session finished.")
