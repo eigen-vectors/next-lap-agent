@@ -14,26 +14,24 @@ def setup_and_launch():
     # Define the project file names
     project_zip_name = "crawl4calender-project.zip"
     project_zip_url = f"https://raw.githubusercontent.com/eigen-vectors/next-lap-agent/main/{project_zip_name}"
-    
+
     # --- Step 1: Download and Unpack the Project ---
     print("\n[1/4] Downloading project files from GitHub...")
     try:
         subprocess.run(["wget", "-q", "-O", project_zip_name, project_zip_url], check=True)
-        
-        # NOTE: The '-o' flag forces overwrite without prompting, resolving the 'replace file' error.
+
+        # THIS IS THE FIX: The "-o" flag overwrites files without asking.
         subprocess.run(["unzip", "-o", project_zip_name], check=True, capture_output=True)
         print("✅ Project files are ready.")
     except subprocess.CalledProcessError as e:
-        # Use return to cleanly exit the function without needing 'exit()'
         print(f"❌ ERROR: Failed to download or unzip project. Details: {e.stderr.decode()}")
-        return 
+        # THIS IS THE FIX: 'return' correctly stops the function.
+        return
 
     # --- Step 2: Install All Dependencies ---
     print("\n[2/4] Installing all dependencies... (This will take a few moments)")
     try:
-        # Install necessary external dependencies first (streamlit, pyngrok, dotenv)
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "streamlit", "pyngrok", "python-dotenv"], check=True)
-        # Install all project-specific dependencies from requirements.txt
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", "requirements.txt"], check=True)
         print("✅ Dependencies installed successfully!")
     except subprocess.CalledProcessError as e:
@@ -43,7 +41,6 @@ def setup_and_launch():
     # --- Step 3: Load Secrets and Configure Ngrok ---
     print("\n[3/4] Loading secrets and configuring ngrok...")
     try:
-        # Load environment variables from the .env file
         if not os.path.exists('.env'):
             print("❌ ERROR: '.env' file not found in the project zip. Cannot proceed.")
             return
@@ -55,7 +52,6 @@ def setup_and_launch():
             print("❌ ERROR: 'NGROK_AUTH_TOKEN' not found in your .env file. Aborting.")
             return
 
-        # Configure ngrok using the token
         os.system(f"ngrok config add-authtoken {ngrok_token}")
         print("✅ ngrok configured successfully using the token from .env file.")
 
@@ -66,13 +62,11 @@ def setup_and_launch():
     # --- Step 4: Launch the Streamlit App ---
     print("\n[4/4] Launching the Streamlit application...")
     try:
-        # Connect ngrok to the default Streamlit port (8501)
         public_url = ngrok.connect(8501)
         print("\n" + "="*55)
         print("🎉 LAUNCH COMPLETE! Your Streamlit App is LIVE at:")
         print(f"   --> {public_url}")
         print("="*55)
-        # Launch Streamlit in the background
         os.system("streamlit run streamlit_app.py &")
     except Exception as e:
         print(f"❌ ERROR: Failed to launch Streamlit or ngrok. Details: {e}")
