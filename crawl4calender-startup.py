@@ -2,23 +2,15 @@ import os
 import sys
 import subprocess
 import time
-import urllib.request
+import re
 from dotenv import load_dotenv
-
-def get_colab_ip():
-    """Fetches the public IP address of the Colab runtime."""
-    try:
-        with urllib.request.urlopen("https://icanhazip.com") as response:
-            return response.read().decode('utf-8').strip()
-    except Exception:
-        return "Could not automatically fetch IP. Please run !curl icanhazip.com in a new cell."
 
 def setup_and_launch():
     """
-    Downloads, installs, and launches the Streamlit app, providing both the
-    localtunnel URL and the required IP address password.
+    Downloads, installs, and launches the Streamlit app, exposing it publicly
+    using a Cloudflare Tunnel.
     """
-    print("🚀 Starting the Crawl4Calender Agent fully automated setup...")
+    print("🚀 Starting the Crawl4Calender Agent with Cloudflare Tunnel...")
 
     project_zip_name = "crawl4calender-project.zip"
     project_zip_url = f"https://raw.githubusercontent.com/eigen-vectors/next-lap-agent/main/{project_zip_name}"
@@ -33,21 +25,31 @@ def setup_and_launch():
         print(f"❌ ERROR: Failed to download or unzip project. Details: {e.stderr.decode()}")
         return
 
-    # --- Step 2: Install Dependencies ---
-    print("\n[2/5] Installing dependencies... (This will take a few minutes)")
+    # --- Step 2: Install Python Dependencies ---
+    print("\n[2/5] Installing Python dependencies...")
     try:
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "streamlit", "python-dotenv"], check=True)
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", "requirements.txt"], check=True)
         print("✅ Python dependencies installed.")
-        print("⏳ Installing localtunnel...")
-        subprocess.run(["npm", "install", "-g", "localtunnel"], check=True, capture_output=True)
-        print("✅ localtunnel installed successfully!")
     except subprocess.CalledProcessError as e:
-        print(f"❌ ERROR: Failed to install dependencies. Details: {e.stderr.decode()}")
+        print(f"❌ ERROR: Failed to install Python packages. Details: {e.stderr.decode()}")
         return
 
-    # --- Step 3: Load Environment Variables ---
-    print("\n[3/5] Loading environment variables...")
+    # --- Step 3: Download and Set Up Cloudflared ---
+    print("\n[3/5] Setting up Cloudflare Tunnel...")
+    try:
+        # Download cloudflared
+        subprocess.run(["wget", "-q", "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"], check=True)
+        # Rename and make executable
+        os.rename("cloudflared-linux-amd64", "cloudflared")
+        os.chmod("cloudflared", 0o755) # Set executable permissions
+        print("✅ cloudflared is ready.")
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"❌ ERROR: Failed to set up cloudflared. Details: {e}")
+        return
+
+    # --- Step 4: Load Environment Variables ---
+    print("\n[4/5] Loading environment variables...")
     try:
         if not os.path.exists('.env'):
             print("⚠️ WARNING: '.env' file not found. App might fail if API keys are needed.")
@@ -58,51 +60,51 @@ def setup_and_launch():
         print(f"❌ ERROR during secret loading: {e}")
         return
 
-    # --- Step 4: Launch Streamlit in Background ---
-    print("\n[4/5] Launching the Streamlit application...")
-    os.system("streamlit run streamlit_app.py &")
-    time.sleep(5) # Give Streamlit a moment to start
-    print("✅ Streamlit is running in the background.")
-
-    # --- Step 5: Create Tunnel and Get Password ---
-    print("\n[5/5] Creating public URL and getting access password...")
+    # --- Step 5: Launch Streamlit and Create Tunnel ---
+    print("\n[5/5] Launching Streamlit and creating public URL...")
     try:
-        # Get the Colab public IP address to use as the password
-        colab_ip = get_colab_ip()
+        # Launch Streamlit in the background
+        os.system("streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0 &")
+        time.sleep(5) # Give Streamlit a moment to start up
 
-        # Start localtunnel
-        lt_process = subprocess.Popen(
-            ["lt", "--port", "8501"],
+        # Start cloudflared tunnel and capture its output
+        tunnel_process = subprocess.Popen(
+            ["./cloudflared", "tunnel", "--url", "http://localhost:8501", "--no-autoupdate"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
         )
-        time.sleep(5) # Give localtunnel a moment to generate the URL
+        time.sleep(3) # Give cloudflared a moment to establish the tunnel
 
-        public_url_line = lt_process.stdout.readline()
-        if "your url is:" in public_url_line:
-            raw_url = public_url_line.split(":")[-1].strip()
-            public_url = f"https:{raw_url}" if raw_url.startswith('//') else f"https://{raw_url}"
-
-            # --- Display Final Information ---
-            print("\n" + "="*60)
-            print("🎉 LAUNCH COMPLETE! Your Streamlit App is LIVE.")
-            print("\n  1. Your Public URL:")
-            print(f"     --> {public_url}")
-            print("\n  2. Your Password:")
-            print(f"     --> {colab_ip}")
-            print("\nInstructions:")
-            print("  - Open the URL in your browser.")
-            print("  - When prompted for a password, copy and paste the IP address above.")
-            print("="*60)
-            print("\n(This script will keep running to maintain the tunnel. Close it to stop.)")
-            lt_process.wait()
-        else:
-            print("❌ ERROR: Could not get public URL from localtunnel.")
-            print(f"   Details: {lt_process.stderr.read()}")
+        public_url = None
+        # The URL is usually printed to stderr
+        for line in iter(tunnel_process.stderr.readline, ''):
+            # Use regex to find the trycloudflare.com URL
+            match = re.search(r"https?://[a-zA-Z0-9-]+\.trycloudflare\.com", line)
+            if match:
+                public_url = match.group(0)
+                break
+        
+        if not public_url:
+            print("❌ ERROR: Could not find the public URL in cloudflared output.")
+            print("   Killing the tunnel process...")
+            tunnel_process.kill()
+            return
+        
+        # --- Display Final Information ---
+        print("\n" + "="*60)
+        print("🎉 LAUNCH COMPLETE! Your Streamlit App is LIVE.")
+        print("\n   Your Public URL:")
+        print(f"   --> {public_url}")
+        print("\n   (No password required!)")
+        print("="*60)
+        print("\n(This script will keep running to maintain the tunnel. Close it to stop.)")
+        
+        # Keep the script running
+        tunnel_process.wait()
 
     except Exception as e:
-        print(f"❌ ERROR: Failed to launch localtunnel. Details: {e}")
+        print(f"❌ ERROR: Failed to launch Streamlit or the tunnel. Details: {e}")
         return
 
 # --- Run the main function ---
