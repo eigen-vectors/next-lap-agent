@@ -12,7 +12,6 @@ def setup_and_launch():
     """
     print("🚀 Starting the Next Lap Agent with Cloudflare Tunnel...")
 
-    # Project zip file to be downloaded from the repository
     project_zip_name = "dataflow.zip"
     project_zip_url = f"https://raw.githubusercontent.com/eigen-vectors/next-lap-agent/main/{project_zip_name}"
 
