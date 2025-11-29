@@ -25,12 +25,19 @@ def setup_and_launch():
         print(f"❌ ERROR: Failed to download or unzip project. Details: {e.stderr.decode()}")
         return
 
-    # --- Step 2: Install Python Dependencies (with pip upgrade) ---
+    # --- Step 2: Install Python Dependencies ---
     print("\n[2/5] Installing Python dependencies...")
     try:
-        # First, upgrade pip to ensure we have the latest dependency resolver
+        # Upgrade pip
         print("--> Upgrading pip...")
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--upgrade", "pip"], check=True)
+        
+        # --- FIX: Force Reinstall LangChain to resolve version conflicts ---
+        print("--> Ensuring compatible LangChain versions...")
+        # Uninstall all related packages to clear out Colab's pre-installed versions
+        subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "-q", "langchain", "langchain-core", "langchain-community", "langchain-mistralai"], check=True)
+        # Reinstall the necessary packages to get the latest, compatible versions
+        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "langchain>=0.1.0", "langchain-mistralai"], check=True)
         
         # Install core packages for the script
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "streamlit", "python-dotenv"], check=True)
@@ -38,8 +45,6 @@ def setup_and_launch():
         # Install packages from requirements.txt
         if os.path.exists("requirements.txt"):
             print("--> Installing packages from requirements.txt...")
-            # This may produce dependency conflict warnings. This is often okay,
-            # but for a permanent fix, you may need to adjust your requirements.txt file.
             subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", "requirements.txt"], check=True)
             print("✅ Python dependencies installed.")
         else:
@@ -75,6 +80,13 @@ def setup_and_launch():
     # --- Step 5: Launch Streamlit and Create Tunnel ---
     print("\n[5/5] Launching Streamlit and creating public URL...")
     try:
+        # --- IMPORTANT: Your main script is main.py, not streamlit_app.py ---
+        # --- Make sure your Streamlit app is called from main.py or change this line ---
+        print("--> Launching main.py...")
+        os.system("python3 main.py &")
+        time.sleep(10) # Give the app a moment to start up
+
+        print("--> Launching Streamlit and Cloudflare tunnel...")
         os.system("streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0 &")
         time.sleep(5)
 
