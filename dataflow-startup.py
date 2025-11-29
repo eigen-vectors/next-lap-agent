@@ -13,7 +13,7 @@ def setup_and_launch():
     print("🚀 Starting the Next Lap Agent with Cloudflare Tunnel...")
 
     project_zip_name = "dataflow.zip"
-    project_zip_url = f"https://raw.githubusercontent.com/eigen-vectors/next-lap-agent/v2/{project_zip_name}"
+    project_zip_url = f"https://raw.githubusercontent.com/eigen-vectors/next-lap-agent/main/{project_zip_name}"
 
     # --- Step 1: Download and Unpack Project ---
     print("\n[1/5] Downloading project files...")
@@ -25,16 +25,26 @@ def setup_and_launch():
         print(f"❌ ERROR: Failed to download or unzip project. Details: {e.stderr.decode()}")
         return
 
-    # --- Step 2: Install Python Dependencies ---
+    # --- Step 2: Install Python Dependencies (with pip upgrade) ---
     print("\n[2/5] Installing Python dependencies...")
     try:
+        # First, upgrade pip to ensure we have the latest dependency resolver
+        print("--> Upgrading pip...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--upgrade", "pip"], check=True)
+        
+        # Install core packages for the script
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "streamlit", "python-dotenv"], check=True)
-        # Assuming your dataflow.zip contains a requirements.txt file
+
+        # Install packages from requirements.txt
         if os.path.exists("requirements.txt"):
+            print("--> Installing packages from requirements.txt...")
+            # This may produce dependency conflict warnings. This is often okay,
+            # but for a permanent fix, you may need to adjust your requirements.txt file.
             subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", "requirements.txt"], check=True)
-            print("✅ Python dependencies from requirements.txt installed.")
+            print("✅ Python dependencies installed.")
         else:
             print("⚠️ WARNING: requirements.txt not found. Skipping dependency installation from file.")
+
     except subprocess.CalledProcessError as e:
         print(f"❌ ERROR: Failed to install Python packages. Details: {e.stderr.decode()}")
         return
@@ -44,7 +54,7 @@ def setup_and_launch():
     try:
         subprocess.run(["wget", "-q", "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"], check=True)
         os.rename("cloudflared-linux-amd64", "cloudflared")
-        os.chmod("cloudflared", 0o755) # Set executable permissions
+        os.chmod("cloudflared", 0o755)
         print("✅ cloudflared is ready.")
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         print(f"❌ ERROR: Failed to set up cloudflared. Details: {e}")
@@ -65,9 +75,8 @@ def setup_and_launch():
     # --- Step 5: Launch Streamlit and Create Tunnel ---
     print("\n[5/5] Launching Streamlit and creating public URL...")
     try:
-        # --- Ensure you have a 'streamlit_app.py' in your dataflow.zip ---
         os.system("streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0 &")
-        time.sleep(5) # Give Streamlit a moment to start up
+        time.sleep(5)
 
         tunnel_process = subprocess.Popen(
             ["./cloudflared", "tunnel", "--url", "http://localhost:8501", "--no-autoupdate"],
@@ -75,7 +84,7 @@ def setup_and_launch():
             stderr=subprocess.PIPE,
             text=True
         )
-        time.sleep(3) # Give cloudflared a moment to establish the tunnel
+        time.sleep(3)
 
         public_url = None
         for line in iter(tunnel_process.stderr.readline, ''):
@@ -86,15 +95,12 @@ def setup_and_launch():
         
         if not public_url:
             print("❌ ERROR: Could not find the public URL in cloudflared output.")
-            print("   Killing the tunnel process...")
             tunnel_process.kill()
             return
         
-        # --- Display Final Information ---
         print("\n" + "="*60)
         print("🎉 LAUNCH COMPLETE! Your Streamlit App is LIVE.")
-        print("\n   Your Public URL:")
-        print(f"   --> {public_url}")
+        print(f"\n   Your Public URL:\n   --> {public_url}")
         print("\n   (No password required!)")
         print("="*60)
         print("\n(This script will keep running to maintain the tunnel. Close it to stop.)")
@@ -105,6 +111,5 @@ def setup_and_launch():
         print(f"❌ ERROR: Failed to launch Streamlit or the tunnel. Details: {e}")
         return
 
-# --- Run the main function ---
 if __name__ == "__main__":
     setup_and_launch()
