@@ -13,7 +13,7 @@ def setup_and_launch():
     print("🚀 Starting the Next Lap Agent with Cloudflare Tunnel...")
 
     project_zip_name = "dataflow.zip"
-    project_zip_url = f"https://raw.githubusercontent.com/eigen-vectors/next-lap-agent/v2/{project_zip_name}"
+    project_zip_url = f"https://raw.githubusercontent.com/eigen-vectors/next-lap-agent/main/{project_zip_name}"
 
     # --- Step 1: Download and Unpack Project ---
     print("\n[1/5] Downloading project files...")
@@ -28,19 +28,15 @@ def setup_and_launch():
     # --- Step 2: Install Python Dependencies ---
     print("\n[2/5] Installing Python dependencies...")
     try:
-        # Upgrade pip
         print("--> Upgrading pip...")
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--upgrade", "pip"], check=True)
         
-        # FIX: Force Reinstall LangChain to resolve version conflicts
         print("--> Ensuring compatible LangChain versions...")
-        subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "-q", "langchain", "langchain-core", "langchain-community", "langchain-mistralai"], check=True, capture_output=True)
+        subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "-q", "langchain", "langchain-core", "langchain-community", "langchain-mistralai"], check=True)
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "langchain>=0.1.0", "langchain-mistralai"], check=True)
         
-        # Install core packages for the script
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "streamlit", "python-dotenv"], check=True)
 
-        # Install packages from requirements.txt
         if os.path.exists("requirements.txt"):
             print("--> Installing packages from requirements.txt...")
             subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", "requirements.txt"], check=True)
@@ -78,10 +74,12 @@ def setup_and_launch():
     # --- Step 5: Launch Streamlit and Create Tunnel ---
     print("\n[5/5] Launching Streamlit and creating public URL...")
     try:
-        # CORRECTED: Launch the Streamlit app directly
+        # --- CORRECTED: Launching streamlit_app.py directly as requested ---
+        print("--> Launching Streamlit app...")
         os.system("streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0 &")
         time.sleep(5) # Give Streamlit a moment to start up
 
+        # Start cloudflared tunnel
         tunnel_process = subprocess.Popen(
             ["./cloudflared", "tunnel", "--url", "http://localhost:8501", "--no-autoupdate"],
             stdout=subprocess.PIPE,
