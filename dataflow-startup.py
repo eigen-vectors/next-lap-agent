@@ -32,11 +32,9 @@ def setup_and_launch():
         print("--> Upgrading pip...")
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--upgrade", "pip"], check=True)
         
-        # --- FIX: Force Reinstall LangChain to resolve version conflicts ---
+        # FIX: Force Reinstall LangChain to resolve version conflicts
         print("--> Ensuring compatible LangChain versions...")
-        # Uninstall all related packages to clear out Colab's pre-installed versions
-        subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "-q", "langchain", "langchain-core", "langchain-community", "langchain-mistralai"], check=True)
-        # Reinstall the necessary packages to get the latest, compatible versions
+        subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "-q", "langchain", "langchain-core", "langchain-community", "langchain-mistralai"], check=True, capture_output=True)
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "langchain>=0.1.0", "langchain-mistralai"], check=True)
         
         # Install core packages for the script
@@ -80,15 +78,9 @@ def setup_and_launch():
     # --- Step 5: Launch Streamlit and Create Tunnel ---
     print("\n[5/5] Launching Streamlit and creating public URL...")
     try:
-        # --- IMPORTANT: Your main script is main.py, not streamlit_app.py ---
-        # --- Make sure your Streamlit app is called from main.py or change this line ---
-        print("--> Launching main.py...")
-        os.system("python3 main.py &")
-        time.sleep(10) # Give the app a moment to start up
-
-        print("--> Launching Streamlit and Cloudflare tunnel...")
+        # CORRECTED: Launch the Streamlit app directly
         os.system("streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0 &")
-        time.sleep(5)
+        time.sleep(5) # Give Streamlit a moment to start up
 
         tunnel_process = subprocess.Popen(
             ["./cloudflared", "tunnel", "--url", "http://localhost:8501", "--no-autoupdate"],
@@ -96,7 +88,7 @@ def setup_and_launch():
             stderr=subprocess.PIPE,
             text=True
         )
-        time.sleep(3)
+        time.sleep(3) # Give cloudflared a moment to establish the tunnel
 
         public_url = None
         for line in iter(tunnel_process.stderr.readline, ''):
