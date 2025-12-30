@@ -8,18 +8,19 @@ const NANO_GEN_URL = "https://api.nanobananaapi.ai/api/v1/nanobanana/generate";
 const NANO_STATUS_URL = "https://api.nanobananaapi.ai/api/v1/nanobanana/record-info";
 const BUCKET_NAME = "event-images";
 const TABLE_NAME = "event_images"; 
-const MAX_QUEUE_DEPTH = 100;
-
+const MAX_QUEUE_DEPTH = 5;
+ 
 // ==========================================
-// SCENE DEFINITIONS (FOR RANDOMIZATION)
+// MOMENT ARCHETYPES (GENERALIZED FOR ANY ACTIVITY)
 // ==========================================
-const SCENE_VARIANTS = [
-  "A runner adjusting gear",
-  "A partially empty stretch of course implying an ongoing race",
-  "An aid-station setup with no people present",
-  "A volunteer or local person interacting naturally with the environment",
-  "A runner seen from behind or at a distance, off-center",
-  "A quiet, in-between moment between effort phases"
+// These are generic framing concepts that the AI will adapt to the specific 'type'
+const MOMENT_ARCHETYPES = [
+  "PREPARATION: A candid moment of adjusting specific gear relevant to the activity (e.g., goggles, helmet, shoes) before or during the event.",
+  "ISOLATION: The subject seen from a distance or from behind, emphasizing the scale of the environment relative to the human.",
+  "MID-ACTION: A realistic, non-heroic angle capturing the physical effort and flow of the specific activity.",
+  "RECOVERY: A quiet, in-between moment of fatigue, heavy breathing, or brief rest.",
+  "ENVIRONMENTAL: A partially empty stretch of the course/water/track that implies the ongoing activity without centering a person.",
+  "INTERACTION: A natural, unposed interaction with a volunteer, aid station, or the terrain itself."
 ];
  
 // ==========================================
@@ -31,81 +32,89 @@ const MASTER_SYSTEM_PROMPT = `
  
 Generate **one single image** with **ZERO TEXT**.
  
-The image must resemble a **real, unstaged photograph** taken during an actual running event.
+The image must resemble a **real, unstaged photograph** taken during an actual event.
 It must **not** appear cinematic, illustrative, stylized, hyper-detailed, or AI-generated.
 If the image appears *designed*, *epic*, *perfect*, or *dramatic*, it is invalid.
  
 ---
  
 ## 1. EVENT CONTEXT (INTERNAL VARIABLES ONLY)
-* **Event name (internal reference only):** {EVENT_NAME}
+* **Event name:** {EVENT_NAME}
+* **ACTIVITY TYPE:** {EVENT_TYPE}
 * **Location / region:** Infer based on event name
-* **Terrain type:** Infer based on event name
-* **Climate / season:** Infer based on event name
+* **Terrain / Environment:** Infer based on event name and activity type
+* **Season:** Infer based on event name
  
-These variables affect realism only. They must **never** appear as text or signage in the image.
+These variables affect realism only. They must **never** appear as text in the image.
  
 ---
  
 ## 2. SCENE SELECTION (MANDATORY ASSIGNMENT)
-You must generate the image based on this specific selected moment:
+You must generate the image based on this specific selected moment archetype:
  
-**{SELECTED_SCENE}**
+**{SELECTED_ARCHETYPE}**
  
-Do not deviate from this selected scene. Do not combine it with other tropes.
+**CRITICAL INSTRUCTION:**
+You must visually translate this archetype into the specific context of **{EVENT_TYPE}**.
+* If Type is **Swimming**: Ensure wet skin, water physics, goggles, swim caps, pool or open water environment.
+* If Type is **Cycling**: Ensure bikes, helmets, road or trail texture, cycling kits.
+* If Type is **Running**: Ensure running posture, bibs, sweat, appropriate footwear.
+* If Type is **Yoga/Gym**: Ensure mats, indoor lighting, specific equipment.
+ 
+Do not deviate from the selected archetype. Do not combine it with other tropes.
  
 ---
  
 ## 3. ENVIRONMENT RULES (REAL WORLD ONLY)
-* Geography must match location accurately
-* Natural clutter required: cracks, dust, leaves, uneven ground
-* No exaggerated landscapes or fantasy scenery
+* Geography must match the location accurately.
+* Natural clutter required: cracks, dust, splashes, equipment debris, uneven ground.
+* No exaggerated landscapes or fantasy scenery.
  
 ---
  
 ## 4. HUMAN PRESENCE
-* 0–3 people maximum
-* Ordinary posture, natural fatigue, sweat, dirt allowed
-* No posing, no direct eye contact
-* Practical, mismatched clothing
+* 0–3 people maximum.
+* Ordinary posture, natural fatigue, sweat, dirt/water allowed.
+* No posing, no direct eye contact.
+* **Clothing/Gear:** Must be strictly accurate to the {EVENT_TYPE}. No generic sci-fi suits.
  
 ---
  
 ## 5. LIGHTING — CRITICAL AI SUPPRESSION
-* Natural daylight only (Overcast or flat light preferred)
-* Soft, inconsistent shadows
-* Minor exposure flaws acceptable
-* STRICTLY PROHIBITED: Golden hour, Dramatic contrast, Stylized lighting
+* Natural daylight only (Overcast or flat light preferred).
+* Soft, inconsistent shadows.
+* Minor exposure flaws acceptable.
+* STRICTLY PROHIBITED: Golden hour, Dramatic contrast, Stylized lighting.
  
 ---
  
 ## 6. CAMERA BEHAVIOR (DOCUMENTARY)
-* Single-camera realism (35mm or 50mm equivalent)
-* Eye-level or casually offset angle
-* Minor motion blur allowed
-* PROHIBITED: Drone shots, Ultra-wide distortion, Telephoto compression
+* Single-camera realism (35mm or 50mm equivalent).
+* Eye-level or casually offset angle.
+* Minor motion blur allowed.
+* PROHIBITED: Drone shots, Ultra-wide distortion, Telephoto compression.
  
 ---
  
 ## 7. COLOR & TEXTURE DISCIPLINE
-* Muted, location-appropriate colors
-* No saturation boost, No HDR
-* Light grain acceptable
+* Muted, location-appropriate colors.
+* No saturation boost, No HDR.
+* Light grain acceptable.
 * If the image looks *clean* or *polished*, it fails.
  
 ---
  
 ## 8. ABSOLUTE PROHIBITIONS
-* NO TEXT of any kind
-* NO race banners, arches, signage, flags, boards
-* NO logos or readable branding
-* NO symmetry
-* NO cinematic fog, mist, god rays
+* NO TEXT of any kind.
+* NO race banners, arches, signage, flags, boards.
+* NO logos or readable branding.
+* NO symmetry.
+* NO cinematic fog, mist, god rays.
  
 ---
  
 ## 9. SUCCESS CRITERION (ENFORCE)
-The final image must resemble a candid photograph from a real race archive.
+The final image must resemble a candid photograph from a real documentary archive.
 Ordinary. Imperfect. Believable. Real.
  
 **OUTPUT INSTRUCTION:**
@@ -168,11 +177,13 @@ Deno.serve(async (req) => {
     }), { status: 500 });
   }
  
-  // 2. Fetch ONE pending event
+  // 2. Fetch ONE pending event (or failed that can be retried)
   const { data: rows, error: dbError } = await supabase
     .from(TABLE_NAME)
     .select('*')
-    .eq('task_status', 'pending')
+    .or('task_status.eq.pending,and(task_status.eq.failed,retry_count.lt.3)')
+    .order('task_status', { ascending: true }) 
+    .order('retry_count', { ascending: true }) 
     .limit(1);
  
   if (dbError) {
@@ -188,32 +199,41 @@ Deno.serve(async (req) => {
   }
  
   const row = rows[0];
-  const festivalName = row.festival_name; 
+  const festivalName = row.festival_name;
+  
+  // NEW: Extract the activity type from the DB row. Default to "General Event" if missing.
+  const activityType = row.type || "General Sports Event";
+  
+  const isRetry = row.task_status === 'failed';
+  const currentRetryCount = row.retry_count || 0;
  
-  console.log(`[Queue] Processing festival: ${festivalName} (ID: ${row.id})`);
+  console.log(`[Queue] Processing: ${festivalName} | Type: ${activityType} | ID: ${row.id}`);
  
   // 3. Mark as Processing & Set Start Time
   await supabase.from(TABLE_NAME).update({ 
     task_status: 'processing',
     generation_started_at: new Date().toISOString(),
-    error_message: null
+    error_message: null,
+    retry_count: isRetry ? currentRetryCount + 1 : currentRetryCount
   }).eq('id', row.id);
  
   try {
     // ------------------------------------------
-    // STEP 0: RANDOM SCENE SELECTION
+    // STEP 0: RANDOM ARCHETYPE SELECTION
     // ------------------------------------------
-    // Randomly select one scene from the array
-    const selectedScene = SCENE_VARIANTS[Math.floor(Math.random() * SCENE_VARIANTS.length)];
-    console.log(`[Queue] Selected Scene: "${selectedScene}"`);
-
+    // Select a generic moment archetype
+    const selectedArchetype = MOMENT_ARCHETYPES[Math.floor(Math.random() * MOMENT_ARCHETYPES.length)];
+    console.log(`[Queue] Selected Archetype: "${selectedArchetype}"`);
+ 
     // ------------------------------------------
     // STEP 1: MISTRAL PROMPT GENERATION
     // ------------------------------------------
-    // Inject both Event Name and the Randomly Selected Scene
+    // Inject Event Name, Activity Type, and the Archetype
     let formattedPrompt = MASTER_SYSTEM_PROMPT.replace("{EVENT_NAME}", festivalName);
-    formattedPrompt = formattedPrompt.replace("{SELECTED_SCENE}", selectedScene);
+    formattedPrompt = formattedPrompt.replace("{EVENT_TYPE}", activityType); // Inject Activity
+    formattedPrompt = formattedPrompt.replace("{SELECTED_ARCHETYPE}", selectedArchetype);
     
+    // We add specific instructions to the Mistral payload to ensure it respects the 'type'
     const mistralResp = await fetch("https://api.mistral.ai/v1/chat/completions", {
       method: "POST",
       headers: { 
@@ -325,7 +345,6 @@ Deno.serve(async (req) => {
     if (count && count > 0 && recursionDepth < MAX_QUEUE_DEPTH) {
       console.log(`[Queue] Triggering next task (depth: ${recursionDepth + 1})`);
       
-      // Fire-and-forget self-invocation
       fetch(`${URL}/functions/v1/generate-event-image`, {
         method: 'POST',
         headers: {
@@ -342,26 +361,36 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ 
       success: true, 
       festival: festivalName,
-      scene: selectedScene,
+      type: activityType,
+      archetype: selectedArchetype,
       url: pUrl.publicUrl,
       remaining: count,
-      recursionDepth
+      recursionDepth,
+      isRetry: isRetry,
+      retryAttempt: isRetry ? currentRetryCount + 1 : 0
     }), {
         headers: { "Content-Type": "application/json" }
     });
  
   } catch (err: any) {
     // ------------------------------------------
-    // STEP 7: ERROR HANDLING
+    // STEP 7: ERROR HANDLING WITH RETRY LOGIC
     // ------------------------------------------
     console.error(`[Queue] ❌ Failed: ${festivalName}`, err);
     
+    const newRetryCount = isRetry ? currentRetryCount + 1 : currentRetryCount + 1;
+    const shouldRetry = newRetryCount < 3;
+    
     await supabase.from(TABLE_NAME).update({ 
-      task_status: 'failed',
-      error_message: err.message
+      task_status: shouldRetry ? 'failed' : 'permanently_failed',
+      retry_count: newRetryCount,
+      error_message: shouldRetry 
+        ? `Attempt ${newRetryCount}/3 failed: ${err.message}`
+        : `Failed after 3 attempts: ${err.message}`
     }).eq('id', row.id);
+    
+    console.log(`[Queue] ${shouldRetry ? `Will retry (${newRetryCount}/3)` : 'Max retries reached - permanently failed'}`);
  
-    // Still check for more tasks (don't block queue on single failure)
     const { count } = await supabase
       .from(TABLE_NAME)
       .select('*', { count: 'exact', head: true })
@@ -384,7 +413,10 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ 
       error: err.message,
       festival: festivalName,
-      recursionDepth
+      type: activityType, // Return type in error for debugging
+      recursionDepth,
+      retryCount: newRetryCount,
+      willRetry: shouldRetry
     }), { status: 500 });
   }
 });
