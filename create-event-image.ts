@@ -13,7 +13,6 @@ const MAX_QUEUE_DEPTH = 5;
 // ==========================================
 // MOMENT ARCHETYPES (GENERALIZED FOR ANY ACTIVITY)
 // ==========================================
-// These are generic framing concepts that the AI will adapt to the specific 'type'
 const MOMENT_ARCHETYPES = [
   "PREPARATION: A candid moment of adjusting specific gear relevant to the activity (e.g., goggles, helmet, shoes) before or during the event.",
   "ISOLATION: The subject seen from a distance or from behind, emphasizing the scale of the environment relative to the human.",
@@ -21,6 +20,17 @@ const MOMENT_ARCHETYPES = [
   "RECOVERY: A quiet, in-between moment of fatigue, heavy breathing, or brief rest.",
   "ENVIRONMENTAL: A partially empty stretch of the course/water/track that implies the ongoing activity without centering a person.",
   "INTERACTION: A natural, unposed interaction with a volunteer, aid station, or the terrain itself."
+];
+
+// ==========================================
+// DATA FIELDS MAP
+// ==========================================
+// List of columns to look for in the database row to build context
+const CONTEXT_FIELDS = [
+  "city", "organiser", "firstEdition", "lastEdition", "mode", "theme",
+  "swimType", "swimmingLocation", "swimCutoff", "dayTemp",
+  "cyclingElevation", "cyclingSurface", "cycleType",
+  "runningElevation", "runningSurface", "Number of Participants"
 ];
  
 // ==========================================
@@ -41,11 +51,18 @@ If the image appears *designed*, *epic*, *perfect*, or *dramatic*, it is invalid
 ## 1. EVENT CONTEXT (INTERNAL VARIABLES ONLY)
 * **Event name:** {EVENT_NAME}
 * **ACTIVITY TYPE:** {EVENT_TYPE}
-* **Location / region:** Infer based on event name
-* **Terrain / Environment:** Infer based on event name and activity type
-* **Season:** Infer based on event name
+* **Location / region:** Infer based on event name or provided city
+* **Season/Weather:** Infer based on dayTemp and date
  
-These variables affect realism only. They must **never** appear as text in the image.
+**DETAILED EVENT DATA (CRITICAL):**
+{DETAILED_CONTEXT}
+ 
+**INSTRUCTION:** You must intelligently incorporate the data above into the visual details:
+* **City/Location:** Use architectural cues or landscape features specific to the city.
+* **Temp/Weather:** If 'dayTemp' is high (>30C), show sweat, heat haze, harsh sun. If low, show breath steam, layers.
+* **Surfaces:** If 'runningSurface' is 'Trail', show dirt/rocks. If 'Road', show tarmac. Match cycling surfaces similarly.
+* **Participants:** If 'Number of Participants' is large (>1000), imply a crowd or pack. If small, show isolation.
+* **Time/Cutoffs:** Use 'swimCutoff' or similar to infer urgency or lighting conditions if applicable.
  
 ---
  
@@ -73,7 +90,7 @@ Do not deviate from the selected archetype. Do not combine it with other tropes.
 ---
  
 ## 4. HUMAN PRESENCE
-* 0–3 people maximum.
+* 0–3 people maximum (unless 'Number of Participants' implies a dense start line scene).
 * Ordinary posture, natural fatigue, sweat, dirt/water allowed.
 * No posing, no direct eye contact.
 * **Clothing/Gear:** Must be strictly accurate to the {EVENT_TYPE}. No generic sci-fi suits.
@@ -81,7 +98,7 @@ Do not deviate from the selected archetype. Do not combine it with other tropes.
 ---
  
 ## 5. LIGHTING — CRITICAL AI SUPPRESSION
-* Natural daylight only (Overcast or flat light preferred).
+* Natural daylight only (Overcast or flat light preferred, unless dayTemp implies harsh sun).
 * Soft, inconsistent shadows.
 * Minor exposure flaws acceptable.
 * STRICTLY PROHIBITED: Golden hour, Dramatic contrast, Stylized lighting.
@@ -150,6 +167,28 @@ function extractUrlSmartly(data: any): string | null {
   }
   return null;
 }
+
+// Helper to build a readable string from the database row based on specific keys
+function buildDetailedContext(row: any): string {
+  let contextLines: string[] = [];
+
+  for (const field of CONTEXT_FIELDS) {
+    // Check for both camelCase (from image) and snake_case (standard DB) keys
+    const snakeField = field.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+    // Check space vs underscore for "Number of Participants"
+    const spaceField = field; 
+    
+    // Value retrieval priority: Exact match -> Snake Case -> Lowercase
+    const value = row[field] || row[snakeField] || row[field.toLowerCase()] || row[field.replace(/ /g, '_')];
+
+    if (value !== null && value !== undefined && value !== "") {
+      contextLines.push(`* **${field}:** ${value}`);
+    }
+  }
+
+  if (contextLines.length === 0) return "No additional detailed data provided.";
+  return contextLines.join("\n");
+}
  
 // ==========================================
 // MAIN SERVE HANDLER
@@ -164,20 +203,16 @@ Deno.serve(async (req) => {
   // Initialize Client
   const supabase = createClient(URL, SERVICE_ROLE);
  
-  // Get recursion depth from header (for queue tracking)
+  // Get recursion depth
   const recursionDepth = parseInt(req.headers.get('x-recursion-depth') || '0');
   console.log(`[Queue] Processing request (depth: ${recursionDepth})`);
  
-  // Safety: Prevent infinite loops
   if (recursionDepth >= MAX_QUEUE_DEPTH) {
     console.error(`[Queue] Max recursion depth reached: ${recursionDepth}`);
-    return new Response(JSON.stringify({ 
-      error: 'Max queue depth reached',
-      recursionDepth 
-    }), { status: 500 });
+    return new Response(JSON.stringify({ error: 'Max queue depth reached', recursionDepth }), { status: 500 });
   }
  
-  // 2. Fetch ONE pending event (or failed that can be retried)
+  // 2. Fetch ONE pending event (or failed)
   const { data: rows, error: dbError } = await supabase
     .from(TABLE_NAME)
     .select('*')
@@ -192,24 +227,20 @@ Deno.serve(async (req) => {
  
   if (!rows || rows.length === 0) {
     console.log('[Queue] No pending tasks. Queue empty.');
-    return new Response(JSON.stringify({ 
-      message: "No pending tasks.",
-      recursionDepth 
-    }), { status: 200 });
+    return new Response(JSON.stringify({ message: "No pending tasks.", recursionDepth }), { status: 200 });
   }
  
   const row = rows[0];
-  const festivalName = row.festival_name;
-  
-  // NEW: Extract the activity type from the DB row. Default to "General Event" if missing.
-  const activityType = row.type || "General Sports Event";
+  // Handle naming variations for main fields
+  const festivalName = row.festival_name || row.festivalName || "Unknown Event";
+  const activityType = row.type || row.activity_type || "General Sports Event";
   
   const isRetry = row.task_status === 'failed';
   const currentRetryCount = row.retry_count || 0;
  
   console.log(`[Queue] Processing: ${festivalName} | Type: ${activityType} | ID: ${row.id}`);
  
-  // 3. Mark as Processing & Set Start Time
+  // 3. Mark as Processing
   await supabase.from(TABLE_NAME).update({ 
     task_status: 'processing',
     generation_started_at: new Date().toISOString(),
@@ -219,8 +250,12 @@ Deno.serve(async (req) => {
  
   try {
     // ------------------------------------------
-    // STEP 0: RANDOM ARCHETYPE SELECTION
+    // STEP 0: CONTEXT & ARCHETYPE PREP
     // ------------------------------------------
+    // Build the rich context string from new columns
+    const detailedContext = buildDetailedContext(row);
+    console.log(`[Queue] Context built: ${detailedContext.substring(0, 50)}...`);
+
     // Select a generic moment archetype
     const selectedArchetype = MOMENT_ARCHETYPES[Math.floor(Math.random() * MOMENT_ARCHETYPES.length)];
     console.log(`[Queue] Selected Archetype: "${selectedArchetype}"`);
@@ -228,12 +263,12 @@ Deno.serve(async (req) => {
     // ------------------------------------------
     // STEP 1: MISTRAL PROMPT GENERATION
     // ------------------------------------------
-    // Inject Event Name, Activity Type, and the Archetype
+    // Inject Event Name, Activity Type, Archetype, AND Detailed Context
     let formattedPrompt = MASTER_SYSTEM_PROMPT.replace("{EVENT_NAME}", festivalName);
-    formattedPrompt = formattedPrompt.replace("{EVENT_TYPE}", activityType); // Inject Activity
+    formattedPrompt = formattedPrompt.replace("{EVENT_TYPE}", activityType);
     formattedPrompt = formattedPrompt.replace("{SELECTED_ARCHETYPE}", selectedArchetype);
+    formattedPrompt = formattedPrompt.replace("{DETAILED_CONTEXT}", detailedContext);
     
-    // We add specific instructions to the Mistral payload to ensure it respects the 'type'
     const mistralResp = await fetch("https://api.mistral.ai/v1/chat/completions", {
       method: "POST",
       headers: { 
@@ -332,7 +367,7 @@ Deno.serve(async (req) => {
     console.log(`[Queue] ✅ Completed: ${festivalName}`);
  
     // ------------------------------------------
-    // STEP 6: CHECK FOR MORE PENDING & SELF-INVOKE
+    // STEP 6: SELF-INVOKE
     // ------------------------------------------
     const { count } = await supabase
       .from(TABLE_NAME)
@@ -341,19 +376,15 @@ Deno.serve(async (req) => {
  
     console.log(`[Queue] Remaining pending tasks: ${count}`);
  
-    // Self-invoke if more work exists and under recursion limit
     if (count && count > 0 && recursionDepth < MAX_QUEUE_DEPTH) {
       console.log(`[Queue] Triggering next task (depth: ${recursionDepth + 1})`);
-      
       fetch(`${URL}/functions/v1/generate-event-image`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${SERVICE_ROLE}`,
           'x-recursion-depth': (recursionDepth + 1).toString()
         }
-      }).catch(err => {
-        console.error('[Queue] Self-invocation failed:', err);
-      });
+      }).catch(err => console.error('[Queue] Self-invocation failed:', err));
     } else if (count === 0) {
       console.log('[Queue] 🎉 All tasks completed!');
     }
@@ -363,18 +394,16 @@ Deno.serve(async (req) => {
       festival: festivalName,
       type: activityType,
       archetype: selectedArchetype,
+      context: detailedContext,
       url: pUrl.publicUrl,
-      remaining: count,
-      recursionDepth,
-      isRetry: isRetry,
-      retryAttempt: isRetry ? currentRetryCount + 1 : 0
+      remaining: count
     }), {
         headers: { "Content-Type": "application/json" }
     });
  
   } catch (err: any) {
     // ------------------------------------------
-    // STEP 7: ERROR HANDLING WITH RETRY LOGIC
+    // STEP 7: ERROR HANDLING
     // ------------------------------------------
     console.error(`[Queue] ❌ Failed: ${festivalName}`, err);
     
@@ -389,34 +418,25 @@ Deno.serve(async (req) => {
         : `Failed after 3 attempts: ${err.message}`
     }).eq('id', row.id);
     
-    console.log(`[Queue] ${shouldRetry ? `Will retry (${newRetryCount}/3)` : 'Max retries reached - permanently failed'}`);
- 
     const { count } = await supabase
       .from(TABLE_NAME)
       .select('*', { count: 'exact', head: true })
       .eq('task_status', 'pending');
  
     if (count && count > 0 && recursionDepth < MAX_QUEUE_DEPTH) {
-      console.log(`[Queue] Continuing despite failure. Remaining: ${count}`);
-      
       fetch(`${URL}/functions/v1/generate-event-image`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${SERVICE_ROLE}`,
           'x-recursion-depth': (recursionDepth + 1).toString()
         }
-      }).catch(err => {
-        console.error('[Queue] Self-invocation failed:', err);
-      });
+      }).catch(err => console.error('[Queue] Self-invocation failed:', err));
     }
  
     return new Response(JSON.stringify({ 
       error: err.message,
       festival: festivalName,
-      type: activityType, // Return type in error for debugging
-      recursionDepth,
-      retryCount: newRetryCount,
-      willRetry: shouldRetry
+      retryCount: newRetryCount
     }), { status: 500 });
   }
 });
