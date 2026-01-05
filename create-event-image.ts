@@ -11,102 +11,121 @@ const TABLE_NAME = "event_images";
 const MAX_QUEUE_DEPTH = 5;
 
 // ==========================================
-// MOMENT ARCHETYPES (VIBRANT / GROUP / HIGH ENERGY)
+// MOMENT ARCHETYPES (DERIVED FROM REFERENCE IMAGES)
 // ==========================================
 const MOMENT_ARCHETYPES = [
-  "GROUP MOMENTUM: A dynamic wide shot of a pack of participants (3+) moving together, capturing the scale and shared energy of the event.",
-  "SHARED JOY: A candid, mid-action close-up of a group of participants (3+) smiling or cheering while performing the activity.",
-  "THE START/SURGE: The high-energy moment of a group crossing a timing mat or moving through a scenic section, conveying speed and excitement.",
-  "CAMARADERIE: Participants engaging with each other (high-fives, running shoulder-to-shoulder) or acknowledging the crowd/volunteers with enthusiasm.",
-  "SCENIC ACTION: A group of athletes framed against the most beautiful landmark or landscape feature of the location, bathed in bright light."
+  "THE PACK SURGE: A telephoto compression shot of a dense group of 3+ athletes running toward the camera, capturing the intensity of a mass start or busy course section.",
+  "SHARED TRIUMPH: A candid, medium shot of two or three participants interacting mid-race or post-race (high-fives, arm-in-arm, laughing), emphasizing camaraderie.",
+  "THE SCENIC ISOLATION: A wide environmental shot where the athlete is a small figure embedded in a majestic landscape (forest, mountain, or open water), emphasizing scale.",
+  "DYNAMIC TRANSITION: (Specific to Multisport) A chaotic but focused shot of athletes moving between disciplines—exiting water, grabbing bikes, or starting the run.",
+  "THE GRITTY CLIMB: A low-angle shot emphasizing the steepness of terrain or the difficulty of an obstacle, focusing on the athlete's determination and physical exertion.",
+  "WATER LEVEL ACTION: (Specific to Swim/Tri) A camera split-shot or surface-level angle showing the chaos of open water swimming—splashes, arms, and bright swim caps."
 ];
 
 // ==========================================
-// DATA FIELDS MAP (INCLUDES NEW COLUMNS)
+// DATA FIELDS MAP
 // ==========================================
 const CONTEXT_FIELDS = [
   "city", "organiser", "firstEdition", "lastEdition", "mode", "theme",
   "swimType", "swimmingLocation", "swimCutoff", "dayTemp",
   "cyclingElevation", "cyclingSurface", "cycleType",
-  "runningElevation", "runningSurface", "numberOfparticipants" // Specific column name
+  "runningElevation", "runningSurface", "numberOfparticipants"
 ];
 
 // ==========================================
-// MASTER SYSTEM PROMPT (PHOTOREALISM / VIBRANT)
+// MASTER SYSTEM PROMPT (HIGH-FIDELITY ANALYSIS)
 // ==========================================
 const MASTER_SYSTEM_PROMPT = `
-## VIBRANT COMMERCIAL SPORTS PHOTOGRAPHY — MASTER PROMPT
+## HIGH-FIDELITY SPORTS PHOTOJOURNALISM — MASTER PROMPT
 ### SYSTEM / IMAGE PROMPT
 
 Generate **one single image** with **ZERO TEXT**.
 
-The image must be a **Photorealistic, High-Definition Photograph**.
-It must resemble a professional shot from a sports magazine or commercial brand campaign (Nike/Adidas style).
-**MOOD:** Bright, Energetic, Positive, Celebrating Fitness.
+The image must be a **Masterpiece of Sports Documentary Photography**.
+It must look exactly like a shot from Reuters, Getty Images Sport, or a high-end event gallery.
+**AESTHETIC:** Authentic, Textured, Dynamic, Unstaged.
+**PROHIBITED:** AI-smoothness, plastic skin, impossible physics, oversaturated "cartoon" colors.
 
 ---
 
-## 1. STYLE & AESTHETIC (STRICT REALISM)
-* **Medium:** Digital Photography (DSLR).
-* **Look:** Sharp focus, high shutter speed (freezing action), distinct textures (skin pores, fabric weave, sweat, water droplets).
-* **ABSOLUTELY PROHIBITED:** Illustration, 3D Render, Painting, Cartoon, Anime, AI-Art style, blurriness, distortion.
-* **If the image looks "fake" or "painted," it is invalid.**
+## 1. VISUAL STYLE & CAMERA
+* **Camera:** Canon EOS R3 or Nikon Z9.
+* **Lens:** 
+    * For Groups/Crowds: 85mm or 70-200mm (Telephoto compression).
+    * For Trail/Scenery: 35mm (Environmental context).
+* **Shutter:** High speed (1/1000s) to freeze sweat, water droplets, and dirt kicking up.
+* **Color Grade:** Natural, slightly desaturated earth tones for trails; vibrant but realistic colors for urban runs. **No HDR filters.**
 
 ---
 
-## 2. EVENT CONTEXT (VARIABLES)
+## 2. EVENT CONTEXT (LOGIC & PHYSICS)
 * **Event:** {EVENT_NAME}
-* **Activity:** {EVENT_TYPE}
-* **Location:** Infer from event name or city data.
-
-**DETAILED CONTEXT DATA:**
+* **Type:** {EVENT_TYPE}
+* **Location Data:**
 {DETAILED_CONTEXT}
 
-**INSTRUCTION:** Use the data above to ground the image in reality:
-* **City:** Backgrounds must match the specific architecture/nature of the '{city}'.
-* **Temperature:** If 'dayTemp' is high, show sun glare, sweat, sunglasses. If low, show clear crisp air.
-* **Surface:** 'runningSurface'/'cyclingSurface' dictates the ground texture (Asphalt vs Dirt vs Grass).
-* **Participants:** Use 'numberOfparticipants' to determine crowd density.
+---
+
+## 3. STRICT VISUAL RULES BY ACTIVITY TYPE (MANDATORY)
+
+**IF EVENT IS 'TRAIL', 'ULTRA', or 'HIKING':**
+*   **Gear:** Hydration vests (Salomon style), trail shoes with grip, buffs/headbands, GPS watches.
+*   **Vibe:** Gritty, endurance, isolation, muddy legs.
+*   **Environment:** Forests, mountains, misty hills, dirt paths. NO ASPHALT.
+*   **Lighting:** Soft, diffused, morning mist or golden hour.
+
+**IF EVENT IS 'FUN RUN', '5K', or 'CHARITY':**
+*   **Gear:** Cotton t-shirts (often matching charity colors), costumes (bunny ears/tutus if applicable), less technical gear.
+*   **Vibe:** Pure joy, laughter, high-fives, holding hands. Less competitive.
+*   **Environment:** Urban parks, paved paths, safety barriers.
+*   **Lighting:** Bright, sunny, high-key.
+
+**IF EVENT IS 'TRIATHLON' or 'DUATHLON':**
+*   **Gear:** ONE-PIECE TRI-SUITS (tight fitting). No baggy shorts. Sunglasses. Race belts.
+*   **Context:** If swimming: Wetsuits (unless tropical), bright silicone caps, goggles. If cycling: Aero helmets, road bikes, water bottles behind saddle.
+*   **Environment:** Transition zones (bike racks), open water (lakes/sea), clean tarmac roads.
+
+**IF EVENT IS 'OBSTACLE' or 'MUD RUN':**
+*   **Visuals:** MUD. Everywhere. On faces, clothes, legs.
+*   **Action:** Climbing, crawling, splashing.
+*   **Gear:** Tight compression wear (black/dark usually), headbands.
+
+**IF EVENT IS 'SWIMRUN' or 'AQUATHLON':**
+*   **Specifics:** Athletes wearing wetsuits cut above the knee + running shoes + pull buoys strapped to legs.
+*   **Action:** Exiting water onto rocks, or running on trails in wetsuits.
 
 ---
 
-## 3. SCENE SELECTION
+## 4. SCENE SELECTION
 Generate the image based on this archetype:
 **{SELECTED_ARCHETYPE}**
 
-**ADAPTATION RULES:**
-* **Running:** Group mid-stride, smiling, bib numbers visible (but unreadable text), running shoes.
-* **Swimming:** Wet skin, splashes frozen in time, goggles, swim caps, bright water.
-* **Cycling:** Sharp bikes, helmets, lycra kits, motion blur on wheels only.
-* **Triathlon:** Dynamic transition or action.
+**ADAPTATION:**
+You must adapt the archetype to the **Specific Logic** defined in Section 3.
+(e.g., If "The Pack Surge" is selected for a "Trail Run", show a line of runners on a narrow dirt path, not a wide road).
 
 ---
 
-## 4. HUMAN PRESENCE & ENERGY
-* **Subject Count:** **Minimum 3 people**. Group shots are mandatory.
-* **Expressions:** Genuine smiles, laughter, determination, focus. **NO SUFFERING.**
-* **Vibe:** Camaraderie, friendship, shared achievement.
-* **Diversity:** Natural mix of genders/ethnicities appropriate for the location.
-* **Clothing:** Bright, colorful, professional athletic gear.
-
----
-
-## 5. LIGHTING & COLOR
-* **Lighting:** Bright Natural Daylight. Sun flares, backlighting, or high-key lighting allowed.
-* **Colors:** Vivid, Saturated, Life-like. Pop the colors of the jerseys and nature.
-* **Shadows:** Soft and natural. No dark, moody, or "gritty" shadows.
+## 5. HUMAN PRESENCE & CROWD LOGIC
+* **Crowd Density:** Use 'numberOfparticipants' to decide.
+    * High (>2000): Background should be filled with other blurred runners.
+    * Low (<200): Background is nature/scenery.
+* **Diversity:** Natural mix of ages and ethnicities suitable for the location.
+* **Expressions:** 
+    * Short distance = Smiles, shouting, energy.
+    * Long distance = Focus, grit, mouth breathing, determination.
 
 ---
 
 ## 6. ABSOLUTE PROHIBITIONS
-* NO TEXT, SIGNAGE, LOGOS, or WATERMARKS.
-* NO distorted faces or hands.
-* NO litter, trash, or dirty environments.
-* NO sadness, injury, or exhaustion.
-* NO solo subjects (must imply a race/event).
+* **NO TEXT** (Bib numbers must be blurry/illegible).
+* **NO** "Gym" settings (must be outdoors).
+* **NO** impossible gear (e.g., swimming with a bike helmet).
+* **NO** solo runners for mass events (must imply competition).
+* **NO** over-editing or "magical" lighting.
 
 **OUTPUT INSTRUCTION:**
-Write a highly detailed, **photorealistic prompt** describing camera lens, lighting, and textures. Output ONLY the raw prompt text.
+Write a precise, photographer-centric prompt describing the subject, action, gear, lighting, and lens. Output ONLY the raw prompt text.
 `;
 
 // ==========================================
@@ -137,18 +156,15 @@ function extractUrlSmartly(data: any): string | null {
   return null;
 }
 
-// Robust context builder from your previous code
 function buildDetailedContext(row: any): string {
   let contextLines: string[] = [];
 
   for (const field of CONTEXT_FIELDS) {
-    // Check for both camelCase (from image) and snake_case (standard DB) keys
     const snakeField = field.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-    // Check space vs underscore for "Number of Participants"
     const lowerField = field.toLowerCase();
     
-    // Value retrieval priority: Exact match -> Snake Case -> Lowercase
-    const value = row[field] || row[snakeField] || row[lowerField] || row[field.replace(/ /g, '_')];
+    // Check specific variations for participants column
+    const value = row[field] || row[snakeField] || row[lowerField] || row[field.replace(/ /g, '_')] || row['numberOfParticipants'] || row['participants'];
 
     if (value !== null && value !== undefined && value !== "") {
       const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
@@ -178,12 +194,10 @@ Deno.serve(async (req) => {
   console.log(`[Queue] Processing request (depth: ${recursionDepth})`);
 
   if (recursionDepth >= MAX_QUEUE_DEPTH) {
-    console.error(`[Queue] Max recursion depth reached: ${recursionDepth}`);
     return new Response(JSON.stringify({ error: 'Max queue depth reached', recursionDepth }), { status: 500 });
   }
 
-  // 2. Fetch ONE pending event (or failed that can be retried)
-  // USING THE ROBUST LOGIC FROM YOUR PREVIOUS CODE
+  // 2. Fetch Pending Task
   const { data: rows, error: dbError } = await supabase
     .from(TABLE_NAME)
     .select('*')
@@ -197,22 +211,18 @@ Deno.serve(async (req) => {
   }
 
   if (!rows || rows.length === 0) {
-    console.log('[Queue] No pending tasks. Queue empty.');
     return new Response(JSON.stringify({ message: "No pending tasks.", recursionDepth }), { status: 200 });
   }
 
   const row = rows[0];
   const festivalName = row.festival_name || row.festivalName || "Unknown Event";
-  
-  // Logic to determine activity type (defaults to Running if not specified)
   const activityType = row.type || row.activity_type || "Running";
-  
   const isRetry = row.task_status === 'failed';
   const currentRetryCount = row.retry_count || 0;
 
   console.log(`[Queue] Processing: ${festivalName} | Type: ${activityType} | ID: ${row.id}`);
 
-  // 3. Mark as Processing & Set Start Time
+  // 3. Mark Processing
   await supabase.from(TABLE_NAME).update({ 
     task_status: 'processing',
     generation_started_at: new Date().toISOString(),
@@ -222,14 +232,13 @@ Deno.serve(async (req) => {
 
   try {
     // ------------------------------------------
-    // STEP 0: CONTEXT & ARCHETYPE PREP
+    // STEP 0: CONTEXT & ARCHETYPE
     // ------------------------------------------
     const detailedContext = buildDetailedContext(row);
-    console.log(`[Queue] Context built: ${detailedContext.substring(0, 50)}...`);
-
-    // Select a VIBRANT archetype
+    
+    // Select archetype
     const selectedArchetype = MOMENT_ARCHETYPES[Math.floor(Math.random() * MOMENT_ARCHETYPES.length)];
-    console.log(`[Queue] Selected Archetype: "${selectedArchetype}"`);
+    console.log(`[Queue] Context built. Selected Archetype: "${selectedArchetype}"`);
 
     // ------------------------------------------
     // STEP 1: MISTRAL PROMPT GENERATION
@@ -248,7 +257,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: MISTRAL_MODEL,
         messages: [{ role: "user", content: formattedPrompt }],
-        temperature: 0.75 // Slightly higher for creativity in "Vibrant" mode
+        temperature: 0.65 // Balanced creativity and strict adherence
       })
     });
 
@@ -323,72 +332,52 @@ Deno.serve(async (req) => {
     console.log(`[Queue] ✅ Completed: ${festivalName}`);
 
     // ------------------------------------------
-    // STEP 6: SELF-INVOKE (QUEUE PROCESSING)
+    // STEP 6: SELF-INVOKE (RECURSION)
     // ------------------------------------------
     const { count } = await supabase
       .from(TABLE_NAME)
       .select('*', { count: 'exact', head: true })
       .eq('task_status', 'pending');
 
-    console.log(`[Queue] Remaining pending tasks: ${count}`);
-
     if (count && count > 0 && recursionDepth < MAX_QUEUE_DEPTH) {
-      console.log(`[Queue] Triggering next task (depth: ${recursionDepth + 1})`);
+      console.log(`[Queue] Triggering next (Remaining: ${count})`);
       fetch(`${URL}/functions/v1/generate-event-image`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${SERVICE_ROLE}`,
           'x-recursion-depth': (recursionDepth + 1).toString()
         }
-      }).catch(err => console.error('[Queue] Self-invocation failed:', err));
-    } else if (count === 0) {
-      console.log('[Queue] 🎉 All tasks completed!');
+      }).catch(err => console.error('Self-invocation failed:', err));
     }
 
     return new Response(JSON.stringify({ 
       success: true, 
       festival: festivalName,
-      type: activityType,
-      url: pUrl.publicUrl,
-      remaining: count
+      url: pUrl.publicUrl 
     }), { headers: { "Content-Type": "application/json" } });
 
   } catch (err: any) {
-    // ------------------------------------------
-    // STEP 7: ROBUST ERROR HANDLING (From 444-line code)
-    // ------------------------------------------
     console.error(`[Queue] ❌ Failed: ${festivalName}`, err);
     
-    // Determine retry logic
     const newRetryCount = isRetry ? currentRetryCount + 1 : currentRetryCount + 1;
     const shouldRetry = newRetryCount < 3;
     
-    // Update DB with appropriate status
     await supabase.from(TABLE_NAME).update({ 
       task_status: shouldRetry ? 'failed' : 'permanently_failed',
       retry_count: newRetryCount,
-      error_message: shouldRetry 
-        ? `Attempt ${newRetryCount}/3 failed: ${err.message}`
-        : `Failed after 3 attempts: ${err.message}`
+      error_message: `${shouldRetry ? 'Retrying' : 'Failed'}: ${err.message}`
     }).eq('id', row.id);
-    
-    console.log(`[Queue] ${shouldRetry ? `Will retry (${newRetryCount}/3)` : 'Max retries reached - permanently failed'}`);
 
-    // CONTINUE QUEUE even if this one failed
     const { count } = await supabase
       .from(TABLE_NAME)
       .select('*', { count: 'exact', head: true })
       .eq('task_status', 'pending');
 
     if (count && count > 0 && recursionDepth < MAX_QUEUE_DEPTH) {
-      console.log(`[Queue] Continuing despite failure. Remaining: ${count}`);
       fetch(`${URL}/functions/v1/generate-event-image`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${SERVICE_ROLE}`,
-          'x-recursion-depth': (recursionDepth + 1).toString()
-        }
-      }).catch(err => console.error('[Queue] Self-invocation failed:', err));
+        headers: { 'Authorization': `Bearer ${SERVICE_ROLE}`, 'x-recursion-depth': (recursionDepth + 1).toString() }
+      }).catch(console.error);
     }
 
     return new Response(JSON.stringify({ error: err.message, retryCount: newRetryCount }), { status: 500 });
