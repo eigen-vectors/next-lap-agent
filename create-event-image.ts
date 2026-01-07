@@ -11,7 +11,7 @@ const TABLE_NAME = "event_images";
 const MAX_QUEUE_DEPTH = 5;
 
 // ==========================================
-// MOMENT ARCHETYPES (DERIVED FROM REFERENCE IMAGES)
+// MOMENT ARCHETYPES
 // ==========================================
 const MOMENT_ARCHETYPES = [
   "THE PACK SURGE: A telephoto compression shot of a dense group of 3+ athletes running toward the camera, capturing the intensity of a mass start or busy course section.",
@@ -33,7 +33,7 @@ const CONTEXT_FIELDS = [
 ];
 
 // ==========================================
-// MASTER SYSTEM PROMPT (HIGH-FIDELITY ANALYSIS)
+// MASTER SYSTEM PROMPT (UPDATED WITH FACIAL LOGIC)
 // ==========================================
 const MASTER_SYSTEM_PROMPT = `
 ## HIGH-FIDELITY SPORTS PHOTOJOURNALISM — MASTER PROMPT
@@ -102,27 +102,34 @@ Generate the image based on this archetype:
 
 **ADAPTATION:**
 You must adapt the archetype to the **Specific Logic** defined in Section 3.
-(e.g., If "The Pack Surge" is selected for a "Trail Run", show a line of runners on a narrow dirt path, not a wide road).
 
 ---
 
-## 5. HUMAN PRESENCE & CROWD LOGIC
+## 5. FACIAL DIVERSITY & EXPRESSIONS (CRITICAL)
+* **ANTI-CLONING:** Every participant MUST have a unique bone structure, face shape, and skin tone. **Do not use the same face model for multiple people.**
+* **PHYSIOGNOMY:** Vary nose shapes, jawlines, and brow ridges. Ensure distinctive, individual features.
+* **SKIN TEXTURE:** Render realistic skin imperfections, pores, and flush (redness from heat/effort). No smooth "plastic" skin.
+* **MICRO-EXPRESSIONS:** 
+    * Subject A: Gritting teeth or breathing through mouth (effort).
+    * Subject B: Focused gaze (concentration).
+    * Subject C: Candid smile (joy).
+    * **Do not paste the same smile on every face.**
+
+---
+
+## 6. HUMAN PRESENCE & CROWD LOGIC
 * **Crowd Density:** Use 'numberOfparticipants' to decide.
-    * High (>2000): Background should be filled with other blurred runners.
-    * Low (<200): Background is nature/scenery.
 * **Diversity:** Natural mix of ages and ethnicities suitable for the location.
-* **Expressions:** 
-    * Short distance = Smiles, shouting, energy.
-    * Long distance = Focus, grit, mouth breathing, determination.
+* **Sweat & Grime:** If the event is long/hard, subjects should look tired and sweaty.
 
 ---
 
-## 6. ABSOLUTE PROHIBITIONS
-* **NO TEXT** (Bib numbers must be blurry/illegible).
-* **NO** "Gym" settings (must be outdoors).
-* **NO** impossible gear (e.g., swimming with a bike helmet).
+## 7. ABSOLUTE PROHIBITIONS
+* **NO TEXT** (Bib numbers can be blurry shapes, but no readable words).
+* **NO** "Stock Photo" aesthetics (white teeth, perfect hair, studio lighting).
+* **NO** impossible gear (e.g., swimming with a bike helmet, swimming on grass).
 * **NO** solo runners for mass events (must imply competition).
-* **NO** over-editing or "magical" lighting.
+* **NO** Identical twins or cloned faces.
 
 **OUTPUT INSTRUCTION:**
 Write a precise, photographer-centric prompt describing the subject, action, gear, lighting, and lens. Output ONLY the raw prompt text.
@@ -257,7 +264,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: MISTRAL_MODEL,
         messages: [{ role: "user", content: formattedPrompt }],
-        temperature: 0.65 // Balanced creativity and strict adherence
+        temperature: 0.65 
       })
     });
 
