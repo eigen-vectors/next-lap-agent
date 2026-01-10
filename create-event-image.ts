@@ -23,17 +23,17 @@ const MOMENT_ARCHETYPES = [
 ];
 
 // ==========================================
-// DATA FIELDS MAP
+// DATA FIELDS MAP (PARTICIPANTS REMOVED)
 // ==========================================
 const CONTEXT_FIELDS = [
   "city", "organiser", "firstEdition", "lastEdition", "mode", "theme",
   "swimType", "swimmingLocation", "swimCutoff", "dayTemp",
   "cyclingElevation", "cyclingSurface", "cycleType",
-  "runningElevation", "runningSurface", "numberOfparticipants"
+  "runningElevation", "runningSurface"
 ];
 
 // ==========================================
-// MASTER SYSTEM PROMPT (UPDATED WITH FACIAL LOGIC)
+// MASTER SYSTEM PROMPT
 // ==========================================
 const MASTER_SYSTEM_PROMPT = `
 ## HIGH-FIDELITY SPORTS PHOTOJOURNALISM — MASTER PROMPT
@@ -118,7 +118,9 @@ You must adapt the archetype to the **Specific Logic** defined in Section 3.
 ---
 
 ## 6. HUMAN PRESENCE & CROWD LOGIC
-* **Crowd Density:** Use 'numberOfparticipants' to decide.
+* **Crowd Density:** **INFER based on Event Type.**
+    * If Marathon/10k/Fun Run: Dense pack, busy background.
+    * If Ultra/Trail/Triathlon: Sparse, isolated, or small clusters.
 * **Diversity:** Natural mix of ages and ethnicities suitable for the location.
 * **Sweat & Grime:** If the event is long/hard, subjects should look tired and sweaty.
 
@@ -170,8 +172,8 @@ function buildDetailedContext(row: any): string {
     const snakeField = field.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
     const lowerField = field.toLowerCase();
     
-    // Check specific variations for participants column
-    const value = row[field] || row[snakeField] || row[lowerField] || row[field.replace(/ /g, '_')] || row['numberOfParticipants'] || row['participants'];
+    // Check specific variations (removed participants)
+    const value = row[field] || row[snakeField] || row[lowerField] || row[field.replace(/ /g, '_')];
 
     if (value !== null && value !== undefined && value !== "") {
       const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
