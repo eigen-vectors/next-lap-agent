@@ -1,0 +1,91 @@
+-- 1. Enable Extensions
+create extension if not exists vector;
+create extension if not exists pg_cron;
+
+-- 2. Add Vector Column (if not exists)
+alter table "Races Database" 
+add column if not exists embedding vector(1024);
+
+-- 3. Create High-Performance Index (Tuned for Speed)
+-- 'ef_construction=64' builds faster/looser, 'm=16' is standard
+drop index if exists races_database_embedding_idx;
+create index races_database_embedding_idx 
+on "Races Database" 
+using hnsw (embedding vector_cosine_ops) 
+with (m = 16, ef_construction = 64);
+
+-- 4. Create the Hybrid Search Function
+create or replace function search_races_hybrid(
+  query_embedding vector(1024),
+  filter_type text default null,      -- e.g. 'Running'
+  filter_location text default null,  -- e.g. 'Mumbai' (Specific only)
+  filter_months text[] default null,  -- e.g. ['January', 'February']
+  match_threshold float default 0.35, -- Lower threshold for broader matches
+  match_count int default 15
+)
+returns table (
+  id uuid,
+  event text,
+  city text,
+  country text,
+  type text,
+  month text,
+  "difficultyLevel" text,
+  similarity float
+)
+language plpgsql
+as $$
+begin
+  return query
+  select
+    r."primaryKey" as id,
+    r.event,
+    r.city,
+    r.country,
+    r.type,
+    r.month,
+    r."difficultyLevel",
+    1 - (r.embedding <=> query_embedding) as similarity
+  from "Races Database" r
+  where 1 - (r.embedding <=> query_embedding) > match_threshold
+  
+  -- Logic 1: Sport Type (Loose Match)
+  and (
+    filter_type is null 
+    or r.type ilike '%' || filter_type || '%'
+    or r."triathlonType" ilike '%' || filter_type || '%'
+  )
+  
+  -- Logic 2: Specific Location (Skipped if filter_location is null)
+  and (
+    filter_location is null 
+    or r.city ilike '%' || filter_location || '%' 
+    or r.state ilike '%' || filter_location || '%'
+  )
+  
+  -- Logic 3: Month Range
+  and (
+    filter_months is null 
+    or r.month = any(filter_months)
+  )
+  
+  order by r.embedding <=> query_embedding
+  limit match_count;
+end;
+$$;
+
+-- 5. Schedule Weekly Updates (Every Sunday at 3 AM UTC)
+-- Replace <YOUR_PROJECT_REF> and <YOUR_SERVICE_ROLE_KEY> below!
+-- You can find Project Ref in your URL: https://[PROJECT_REF].supabase.co
+select cron.schedule(
+  'weekly-embedding-refresh',
+  '0 3 * * 0', 
+  $$
+  select
+    net.http_post(
+      url:='https://<YOUR_PROJECT_REF>.supabase.co/functions/v1/update-embeddings',
+      headers:='{"Content-Type": "application/json", "Authorization": "Bearer <YOUR_SERVICE_ROLE_KEY>"}'::jsonb,
+      body:='{}'::jsonb
+    ) as request_id;
+  $$
+);
