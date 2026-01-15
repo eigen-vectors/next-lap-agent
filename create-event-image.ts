@@ -23,7 +23,7 @@ const MOMENT_ARCHETYPES = [
 ];
 
 // ==========================================
-// DATA FIELDS MAP (PARTICIPANTS REMOVED)
+// DATA FIELDS MAP
 // ==========================================
 const CONTEXT_FIELDS = [
   "city", "organiser", "firstEdition", "lastEdition", "mode", "theme",
@@ -172,7 +172,7 @@ function buildDetailedContext(row: any): string {
     const snakeField = field.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
     const lowerField = field.toLowerCase();
     
-    // Check specific variations (removed participants)
+    // Check specific variations
     const value = row[field] || row[snakeField] || row[lowerField] || row[field.replace(/ /g, '_')];
 
     if (value !== null && value !== undefined && value !== "") {
@@ -314,16 +314,21 @@ Deno.serve(async (req) => {
     if (!imageUrl) throw new Error("Polling timed out.");
 
     // ------------------------------------------
-    // STEP 4: STORAGE UPLOAD
+    // STEP 4: STORAGE UPLOAD (JPG CONVERSION)
     // ------------------------------------------
     const imgResp = await fetch(imageUrl);
     const imgBlob = await imgResp.blob();
     const cleanName = getCleanFilename(festivalName);
-    const filePath = `events/${cleanName}/${Date.now()}.png`; 
+    
+    // CHANGED: File extension to .jpg
+    const filePath = `events/${cleanName}/${Date.now()}.jpg`; 
 
     const { error: uploadError } = await supabase.storage
       .from(BUCKET_NAME)
-      .upload(filePath, imgBlob, { contentType: 'image/png', upsert: true });
+      .upload(filePath, imgBlob, { 
+        contentType: 'image/jpeg', // CHANGED: MIME type to jpeg
+        upsert: true 
+      });
 
     if (uploadError) throw new Error(`Storage Upload Error: ${uploadError.message}`);
 
